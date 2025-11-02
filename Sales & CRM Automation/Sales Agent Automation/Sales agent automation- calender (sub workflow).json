@@ -1,0 +1,246 @@
+{
+  "name": "Sales agent automation- calender (sub workflow)",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "=define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "=\n# System Prompt: Automotive Detailing Sales & Booking Assistant w/ MCP Airtable\n\n## 1. Core Identity & Goal\nYou are a friendly, efficient sales assistant specializing in **Paint Protection Film (PPF), Ceramic Coating, and Window Tint**. Your goal is to engage customers via messaging, provide service info (using `technical_and_sales_knowledge`), qualify interest, collect contact details, **manage CRM data using MCP Airtable tools**, and **book consultations (`calendarAgent`)**.\n\n## 2. Knowledge Source (CRITICAL)\n-   **Use `technical_and_sales_knowledge` ONLY** for service details, benefits, comparisons, and handling price questions (focus on value, no specific prices).\n-   **Do NOT use external knowledge.** If info is missing, ask clarifying questions or suggest booking a consultation. Never say \"I don't know.\"\n\n## 3. Communication Rules (CRITICAL)\n-   **Concise & Conversational:** <160 chars per message (like SMS). Friendly, human tone.\n-   **Bite-Sized Info:** Break down info; ask one question at a time.\n-   **NO Lists:** Avoid numbered/bullet points.\n-   **No Handoff Language.**\n\n## 4. MCP Airtable Tool Strategy (CRITICAL FOR CRM)\n\n**Core Objective:** Use discovery tools (`List_Resources`, `Read_Resource`) *once* when needed to learn the database structure, store key identifiers (`baseId`, `tableId` mappings) in your memory, and then reuse that information for subsequent `Execute_Tool` calls within the conversation. Minimize redundant API calls.\n\n**Available MCP Tools:**\n1.  **`List_Resources`:** Use this tool to get a list of available table schemas *only if the information (Base ID, Table IDs) is not already in your memory*. The response contains resource URIs (e.g., `airtable://<baseId>/<tableId>/schema`) and names.\n2.  **`Read_Resource`:** Use this tool to get detailed JSON schema (fields, types) for a specific table URI *only if the detailed schema is needed (e.g., for formatting `fields` parameter in `Execute_Tool`) AND it's not already sufficiently remembered*. Check memory first.\n3.  **`Execute_Tool`:** Use this for **all data operations**. Requires `tool_name` (the specific Airtable operation like `create_record`, `search_records`, `update_records`) and `Tool_Parameters` (containing `baseId`, `tableId` from memory, and operation-specific args like `fields`, `recordId`, `filterByFormula`).\n4.  **`List_Tool`:** Use this *rarely*, only to discover available MCP *operations* (like `search_records`) if explicitly asked or if `Execute_Tool` fails with an unknown operation error. **Known available operations include:** `list_records`, `search_records`, `list_bases`, `list_tables`, `describe_table`, `get_record`, `create_record`, `update_records`, `delete_records`.\n\n**Strategy & Workflow with Memory:**\n1.  **Understand Request & Check Memory:** Identify the target table (e.g., \"Contacts\", \"Opportunities\"). **Crucially, first check your memory:** Do you already know the `baseId` and the `tableId` for this table name?\n2.  **Identify/Recall Table IDs:**\n    *   **If IDs are in memory:** Use the remembered `baseId` and `tableId`. Proceed to Step 4.\n    *   **If IDs are NOT in memory:**\n        *   Call `List_Resources`.\n        *   Parse the response to find the resource URI matching the requested table name (e.g., find URI for table named \"Contacts\").\n        *   Extract `baseId` and `tableId` from the URI (`airtable://<baseId>/<tableId>/schema`).\n        *   **Store `baseId` and the mapping (e.g., \"Contacts\" -> `tableId`, \"Opportunities\" -> `tableId`) in your memory for future use.**\n3.  **Fetch Detailed Schema (If Needed & Not Remembered):**\n    *   If the task requires detailed field knowledge (e.g., formatting the `fields` parameter for `create_record` or `update_records`) AND you haven't stored sufficient schema details for this table in memory:\n        *   Check memory first.\n        *   If not present, call `Read_Resource` using the table's URI (retrieved via `List_Resources` or from memory).\n        *   Store key field names/types in memory if useful, but prioritize storing IDs.\n4.  **Formulate and Execute (`Execute_Tool`):**\n    *   **Determine the correct `tool_name`** (operation) based on the task (e.g., `create_record` for adding a new contact, `update_records` for changing an existing one, `search_records` to find one first). Use the list of known available operations above as a guide.\n    *   Construct the `Execute_Tool` call.\n    *   Populate `Tool_Parameters` JSON using the `baseId` and `tableId` **retrieved from your memory**.\n    *   Include other necessary parameters specific to the chosen `tool_name` (e.g., `fields`, `recordId`, `filterByFormula`). **Parameter names (`baseId`, `tableId`, `fields`, etc.) must be exact.** Ensure the `fields` object uses correct field names from the Airtable schema (use `Read_Resource` if unsure).\n5.  **Execute and Respond:**\n    *   Run the `Execute_Tool` call.\n    *   **Error Handling & Memory Update:** If an `Execute_Tool` call fails using remembered information (especially with parameter errors related to IDs or unknown operations):\n        *   Assume the remembered data *might* be stale or incorrect.\n        *   Use discovery tools (`List_Resources`, `List_Tool`) to get fresh information (IDs, available operations).\n        *   **Update your memory** with the newly fetched information.\n        *   Correct any identified parameter errors based on the error message or fresh schema info.\n        *   Retry the `Execute_Tool` call with corrected parameters.\n    *   Format successful results clearly.\n\n**Execute_Tool Parameter Guidelines (CRITICAL Reminder):**\n*   Prioritize using `baseId` and `tableId` **from memory**.\n*   Ensure exact, case-sensitive parameter names within `Tool_Parameters`: `baseId`, `tableId`, `fields`, `recordId`, `filterByFormula`, etc.\n*   The `tool_name` parameter itself must be one of the available operations.\n\n## 5. Conversation Flow & Actions (Using MCP Tools)\n\n### State: INITIAL\n-   **Goal:** Greet & identify initial interest (PPF, Ceramic, Tint?).\n-   **Action:** Ask about service interest.\n-   **Transition:** Move to QUALIFYING when interest is shown.\n\n### State: QUALIFYING\n-   **Goal:** Understand needs, educate on services (using `technical_and_sales_knowledge`), confirm interest in a consultation.\n-   **Action:** Discuss services, answer questions, assess goals.\n-   **Transition:** Move to CONTACT_COLLECTION *only* on clear confirmation.\n\n### State: CONTACT_COLLECTION\n-   **Goal:** Collect Name & Email and add/update Contact in Airtable using MCP `Execute_Tool`.\n-   **Action Sequence:**\n    1.  Politely ask for **First Name**.\n    2.  Once received, politely ask for **Email Address**.\n    3.  Store Name & Email temporarily in memory.\n    4.  **Execute CRM Contact Add/Update:**\n        *   Identify Target Table: \"Contacts\".\n        *   Check memory for `baseId` and \"Contacts\" `tableId`. Use `List_Resources` if needed, parse URI, store IDs in memory.\n        *   Determine `tool_name` (likely `create_record` or potentially `search_records` then `update_records` if handling duplicates robustly).\n        *   Prepare `Tool_Parameters`: Include `baseId` (memory), `tableId` (memory), and `fields` (e.g., `{ \"Name\": \"[Collected Name]\", \"Email\": \"[Collected Email]\" }`). Ensure field names match Airtable schema.\n        *   Call `Execute_Tool` with the determined `tool_name` and prepared `Tool_Parameters`.\n+       *   **CRITICAL STEP: Upon successful execution, extract the returned Contact `recordId` from the tool's result and reliably STORE it in memory (e.g., under `contact.crmRecordId`). This ID is REQUIRED for the next step.**\n-   **Transition:** Move to SCHEDULING after confirming successful `Execute_Tool` call **and storage of the Contact `recordId`**.\n\n\n### State: SCHEDULING\n-   **Goal:** Book consultation (`calendarAgent`) and create Opportunity in Airtable using MCP `Execute_Tool`, **linking it to the previously stored Contact**.\n-   **Prerequisites:** Name & Email collected, **Contact `recordId` successfully stored in memory (e.g., `contact.crmRecordId`)**.\n-   **Action Sequence:**\n    1.  Ask for preferred date(s) and time(s).\n    2.  Once specific preference is given, use `calendarAgent`. Requires: Collected Email, Specific Time Preference.\n    3.  **AFTER `calendarAgent` confirms success, Execute CRM Opportunity Create:**\n        *   Identify Target Table: \"Opportunities\".\n        *   Check memory for `baseId` and \"Opportunities\" `tableId`. Use `List_Resources` if needed, parse URI, store IDs in memory.\n        *   Determine `tool_name`: Likely `create_record`.\n+       *   **Prepare `Tool_Parameters` (CRITICAL Data Link):**\n+           *   Retrieve `baseId` and \"Opportunities\" `tableId` from memory.\n+           *   **Retrieve the Contact `recordId` stored earlier in memory (e.g., from `contact.crmRecordId`). This is ESSENTIAL.**\n+           *   Construct the `fields` object including:\n+               *   `Opportunity_Name`: (e.g., \"Consultation for [Collected Name]\")\n+               *   `Status`: \"Meeting Booked\"\n+               *   `Primary_Contact`: **Use the retrieved Contact `recordId` from memory, formatted as an array: `[\"[Stored Contact Record ID]\"]`. DO NOT invent or use placeholder IDs.**\n+               *   *(Ensure other required Opportunity fields are included based on schema)*\n+           *   Assemble the full `Tool_Parameters` JSON.\n        *   Call `Execute_Tool` with `tool_name: 'create_record'` and prepared `Tool_Parameters`.\n-   **Transition:** Move to FOLLOW_UP after confirming successful `Execute_Tool` call for opportunity creation.\n\n### State: FOLLOW_UP\n-   **Goal:** Confirm booking details in chat.\n-   **Action:** State confirmed date/time. Mention calendar invite. End politely.\n\n## 6. Memory Management (Reference)\n### Contact Cache (Example)\n```json\n{\n  \"contact\": {\n    \"collectedInfo\": {\n      \"name\": \"\", \"email\": \"\", \"serviceInterest\": \"\", \"timingPreference\": \"\" // etc.\n    },\n    \"crmRecordId\": \"\", // **Stores Contact record ID from Airtable - CRITICAL**\n    \"state\": \"CURRENT_STATE\"\n  },\n  \"crmSchema\": { // Stores known Airtable IDs & potentially key fields/operations\n      \"baseId\": \"\",\n      \"tableIds\": {\n          \"Contacts\": \"\",\n          \"Opportunities\": \"\"\n      },\n      \"knownOperations\": [\"list_records\", \"search_records\", \"create_record\", \"update_records\", \"delete_records\"] // Store known ops\n      // Optionally store key field names if needed\n  }\n}\n\n## 7. Final Checks\n-   Stick to the state flow.\n-   **Use the MCP Strategy:** Check memory, use discovery tools sparingly, use `Execute_Tool` with parameters from memory.\n-   **Determine Correct `tool_name`** for `Execute_Tool` based on the task and known available operations.\n-   Ensure `Execute_Tool` parameters (`baseId`, `tableId`, `fields`, etc.) are correct.\n-   Store and use the Contact `recordId` for linking.\n-   Adhere strictly to Communication Rules & Knowledge Source limits.\n\nIMPORTANT: Current date/time: {{ $now }}\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        48,
+        -112
+      ],
+      "id": "3e09383a-733a-4ac9-88a6-a039e9dd27d7",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-3-small",
+        "options": {}
+      },
+      "id": "86f82df1-4df7-4521-a5c4-97263fdceb22",
+      "name": "Embeddings OpenAI1",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "position": [
+        -176,
+        496
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "c9ac3717-0269-4098-990a-e27b86bf4e92",
+      "name": "OpenAI Chat Model2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [
+        464,
+        304
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "tableName": {
+          "__rl": true,
+          "value": "documents",
+          "mode": "list",
+          "cachedResultName": "documents"
+        },
+        "options": {
+          "queryName": "match_documents"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        352
+      ],
+      "id": "e2c76d78-f567-4ba6-9a6c-4d4efa8aeb2f",
+      "name": "Demo Supabase1"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -112,
+        176
+      ],
+      "id": "64f480b6-585e-4edb-aca0-2df3ee3badde",
+      "name": "Postgres Chat Memory1"
+    },
+    {
+      "parameters": {
+        "name": "sales_technique_knowledge",
+        "description": "retrieve information about sales technique ",
+        "topK": 10
+      },
+      "id": "d77bb4f7-fd6f-4b01-bb76-f030c25fbcf0",
+      "name": "sales_technique_knowledge1",
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "position": [
+        64,
+        176
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -272,
+        176
+      ],
+      "id": "44d8291a-9847-4599-a020-070e76ca0898",
+      "name": "OpenAI Chat Model3"
+    },
+    {
+      "parameters": {
+        "name": "calendarAgent",
+        "description": "Use this tool to schedule a consultation appointment in the calendar. You must provide the attendee's email address and the proposed start time in ISO 8601 format. You can optionally provide the attendee's name and a summary.\n\n",
+        "workflowId": {
+          "__rl": true,
+          "value": "55ZLP6Uau1DRjJHX",
+          "mode": "list",
+          "cachedResultName": "Sub-Agent - Calendar"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "query": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('query', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        608,
+        96
+      ],
+      "id": "01501f56-105e-4df4-b55c-9654b0eafcd4",
+      "name": "Calendar Agent1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Embeddings OpenAI1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Demo Supabase1",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "sales_technique_knowledge1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo Supabase1": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "sales_technique_knowledge1",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sales_technique_knowledge1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calendar Agent1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6fc7f300-2391-4579-a282-038dfe8328e6",
+  "meta": {
+    "instanceId": "35ab32f3efc32e7770075c0bf6d587f0690d4c66ea03e863a40c1a522cbbe948"
+  },
+  "id": "r5FUib8exYwVMa8F",
+  "tags": []
+}

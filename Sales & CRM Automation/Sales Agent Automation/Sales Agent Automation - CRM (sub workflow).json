@@ -1,0 +1,324 @@
+{
+  "name": "Sales Agent Automation - CRM (sub workflow)",
+  "nodes": [
+    {
+      "parameters": {
+        "base": {
+          "__rl": true,
+          "value": "appmZHna96JsKNeJL",
+          "mode": "list",
+          "cachedResultName": "n8n Sales Agent (BenAI)",
+          "cachedResultUrl": "https://airtable.com/appmZHna96JsKNeJL"
+        },
+        "table": {
+          "__rl": true,
+          "value": "={{ $json.query.tableId }}",
+          "mode": "id"
+        },
+        "id": "={{ $json.query.recordId }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        112,
+        0
+      ],
+      "id": "fe6a7b29-e6d0-414b-ae78-d455f946894e",
+      "name": "Airtable"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "11ae4f49-44ec-4416-a8d2-49a15fdf1e63",
+              "name": "text",
+              "value": "=I have filled out the form as following:\n\n<form_input>\n{{ JSON.stringify($json) }}\n</form_input>\n\nLet me know if you need anything else, thanks",
+              "type": "string"
+            },
+            {
+              "id": "0ef41f87-5d6e-49da-a78a-7fed5b3b370c",
+              "name": "sessionId",
+              "value": "={{ $json.sessionId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        544,
+        0
+      ],
+      "id": "bd69b365-2b2e-4351-8af8-01dca3030c29",
+      "name": "Edit Fields - form"
+    },
+    {
+      "parameters": {
+        "path": "sales-lead-form",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        0
+      ],
+      "id": "50ef87a3-f1d2-42c2-bc5a-9479e9236d85",
+      "name": "Airtable Form Submitted",
+      "webhookId": "743228b1-915f-4628-a74a-ac277d227051"
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "278982118641623",
+        "recipientPhoneNumber": "={{ $('Airtable').item.json[\"Whastapp #\"] }}",
+        "template": "inbound_lead_notification|en",
+        "components": {
+          "component": [
+            {
+              "bodyParameters": {
+                "parameter": [
+                  {
+                    "text": "={{ $('Airtable').item.json.Name }}"
+                  },
+                  {
+                    "text": "={{ $('Airtable').item.json['Car Model / Make / Year'] }}"
+                  },
+                  {
+                    "text": "={{ $('Airtable').item.json['Interested in'][0] }}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        752,
+        0
+      ],
+      "id": "e3b6b5ef-afcc-4234-ac23-6f99205e968e",
+      "name": "WhatsApp Business Cloud2",
+      "webhookId": "efdf335a-e120-488f-bfd0-bae49c454b6c"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appmZHna96JsKNeJL",
+          "mode": "list",
+          "cachedResultName": "n8n Sales Agent (BenAI)",
+          "cachedResultUrl": "https://airtable.com/appmZHna96JsKNeJL"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblIWVK0K0l5x8MD4",
+          "mode": "list",
+          "cachedResultName": "Contacts",
+          "cachedResultUrl": "https://airtable.com/appmZHna96JsKNeJL/tblIWVK0K0l5x8MD4"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json.Name }}",
+            "Email": "={{ $json.Email }}",
+            "Phone": "={{ $json['Whastapp #'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Name and Org",
+              "displayName": "Name and Org",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Account",
+              "displayName": "Account",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Opportunities",
+              "displayName": "Opportunities",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "LinkedIn",
+              "displayName": "LinkedIn",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        320,
+        0
+      ],
+      "id": "16f21472-9da1-4246-9ec9-db8d7b5084fc",
+      "name": "Create Contact"
+    }
+  ],
+  "pinData": {
+    "Airtable Form Submitted": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.benai.agency",
+            "user-agent": "Mozilla/5.0 (compatible; AirtableScripting; +https://airtable.com/developers/scripting;)",
+            "accept": "*/*",
+            "accept-encoding": "gzip,deflate",
+            "x-airtable-source": "appmZHna96JsKNeJL/wflTdWRuMMUw4eaTR",
+            "x-forwarded-for": "54.163.57.194",
+            "x-forwarded-host": "n8n.benai.agency",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "4f7a0fd81c9f",
+            "x-real-ip": "54.163.57.194"
+          },
+          "params": {},
+          "query": {
+            "recordId": "recEOSF2sMmS7Zl3G",
+            "tableId": "tblx4RCYHWg0QDPhk"
+          },
+          "body": {},
+          "webhookUrl": "https://n8n.benai.agency/webhook/sales-lead-form",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Airtable": {
+      "main": [
+        [
+          {
+            "node": "Create Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields - form": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Business Cloud2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable Form Submitted": {
+      "main": [
+        [
+          {
+            "node": "Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Contact": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields - form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "dd393f4f-8901-4fc7-90d5-312e5836d664",
+  "meta": {
+    "instanceId": "35ab32f3efc32e7770075c0bf6d587f0690d4c66ea03e863a40c1a522cbbe948"
+  },
+  "id": "BO989dQ6RNwytpOx",
+  "tags": []
+}

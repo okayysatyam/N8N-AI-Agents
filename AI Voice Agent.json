@@ -1,0 +1,194 @@
+{
+  "name": "AI Voice Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "voice-webhook",
+        "options": {}
+      },
+      "id": "d59388f3-93cc-4b9a-832f-5f059e1c5105",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        112
+      ],
+      "webhookId": "={{$execution.workflow.id}}"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract voice message and phone number from Twilio\nconst fromPhone = $input.first().body.From;\nconst messageText = $input.first().body.Body || $input.first().body.SpeechResult;\nconst toPhone = $input.first().body.To;\nconst callSid = $input.first().body.CallSid;\n\nreturn {\n  fromPhone: fromPhone,\n  messageText: messageText,\n  toPhone: toPhone,\n  callSid: callSid,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "bc341efe-9f5e-402f-b214-bf57d38bdf8e",
+      "name": "Extract Phone Info",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "a238623e-f66c-4039-a07d-0bcc30ca52a5",
+      "name": "OpenAI Chat",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        112
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "openai_creds"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Check if response should trigger appointment booking flow\nconst aiResponse = $input.first().json.choices[0].message.content;\nconst messageText = $node['extract-info'].json.messageText.toLowerCase();\n\nconst appointmentKeywords = ['appointment', 'book', 'schedule', 'available', 'time', 'slot'];\nconst isAppointmentRequest = appointmentKeywords.some(keyword => messageText.includes(keyword));\n\nreturn {\n  aiResponse: aiResponse,\n  isAppointmentRequest: isAppointmentRequest,\n  originalMessage: $node['extract-info'].json.messageText\n};"
+      },
+      "id": "e6713782-03dd-4e3d-8ad7-f00a75d198a7",
+      "name": "Check Intent",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "basicAuth",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/{{$secrets.TWILIO_ACCOUNT_SID}}/Messages.json",
+        "options": {}
+      },
+      "id": "bf8a21f9-afcc-41f3-bd0c-b21e363f211a",
+      "name": "Send Twilio Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": null,
+          "name": "twilio_basic_auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "id": "9caab335-32d1-4ce3-b2eb-3c17fb627341",
+      "name": "Save to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "783cb6e4-8850-41ff-b77f-ac01884cd077",
+      "name": "End",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        208,
+        112
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract Phone Info": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Phone Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat": {
+      "main": [
+        [
+          {
+            "node": "Check Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Intent": {
+      "main": [
+        [
+          {
+            "node": "Send Twilio Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Twilio Response": {
+      "main": [
+        [
+          {
+            "node": "End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "eab08ebe-5814-4157-b96b-8b89346da924",
+  "meta": {
+    "instanceId": "35ab32f3efc32e7770075c0bf6d587f0690d4c66ea03e863a40c1a522cbbe948"
+  },
+  "id": "rBUKH0Dn6Clr4Rit",
+  "tags": []
+}

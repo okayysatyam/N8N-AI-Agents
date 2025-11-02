@@ -1,0 +1,360 @@
+{
+  "name": "Fitness coach Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "object": "activity",
+        "event": "update",
+        "options": {}
+      },
+      "id": "2b93483d-8b13-4911-989a-48ec655a0814",
+      "name": "Strava Trigger",
+      "type": "n8n-nodes-base.stravaTrigger",
+      "position": [
+        -432,
+        192
+      ],
+      "webhookId": "c656f7eb-6176-48b1-a68f-7e169699cecb",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.0-flash-exp",
+        "options": {}
+      },
+      "id": "f3c29db7-1ef1-47f5-9ac4-44046cc9e09f",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "position": [
+        272,
+        320
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "sendTo": "amjid@amjidali.com",
+        "subject": "=",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "64273c0e-1b9a-4d63-81cc-7e072c0b9138",
+      "name": "Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        1856,
+        32
+      ],
+      "webhookId": "70ab1218-b5a1-47e7-9e9e-89c5c4f84c15",
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recursive function to flatten JSON into a single string\nfunction flattenJson(obj, prefix = '') {\n let str = '';\n for (const key in obj) {\n if (typeof obj[key] === 'object' && obj[key] !== null) {\n str += flattenJson(obj[key], `${prefix}${key}.`);\n } else {\n str += `${prefix}${key}: ${obj[key]}\\n`;\n }\n }\n return str;\n}\n\n// Get input data\nconst data = $input.all();\n\n// Initialize a variable to store the final output\nlet output = '';\n\n// Process each item\ndata.forEach(item => {\n output += flattenJson(item.json);\n output += '\\n---\\n'; // Separator between records\n});\n\n// Return the merged string as output\nreturn [{ json: { data: output } }];\n"
+      },
+      "id": "ea28682a-bc2a-4728-86f1-2e156166156c",
+      "name": "Combine Everything",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -96,
+        192
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "agent": "conversationalAgent",
+        "promptType": "define",
+        "text": "=You are an Triathlon Coach specializing in guiding the athlete on running, swimming, and cycling. Your role is to analyze Strava data and provide personalized coaching to help users improve their performance. Your responses must be motivational, data-driven, and tailored to the user's fitness level, goals, and recent activity trends.\n\n#### Key Abilities:\n1. **Analyze Activity Data**:\n - Evaluate performance metrics such as distance, pace, heart rate, power, elevation, cadence, and swim strokes.\n - Identify trends, strengths, and areas for improvement.\n\n2. **Provide Feedback**:\n - Break down the user's activities and explain their performance in detail (e.g., pacing consistency, effort levels, technique).\n - Highlight achievements and areas that need focus.\n\n3. **Create Improvement Plans**:\n - Suggest actionable steps to improve fitness, endurance, speed, or technique based on the user's goals and performance data.\n - Recommend specific workouts, recovery plans, or cross-training exercises tailored to the user's needs.\n\n4. **Set Goals and Challenges**:\n - Help the user set realistic short-term and long-term goals (e.g., achieving a new personal best, improving endurance, or preparing for a triathlon).\n - Suggest weekly or monthly challenges to stay motivated.\n\n5. **Motivational Coaching**:\n - Provide positive reinforcement and encouragement.\n - Help the user maintain consistency and avoid burnout.\n\n6. ** Data Analysis **\n - Do some data formatting also when doing activities ensure to analyze the duration, time, pace etc, too many seonds will not make differnece, try to see the duration which is easy to understand, moreoover, the time of the day when i did activity and so on.\n\n***Capabilities as a Triathlong Coach:***\n** Data Categorization and Context:**\n\nIdentify whether the activity is swimming, cycling, or running.\n-For swimming, distinguish between pool swimming (laps, strokes) and open water swimming (long-distance, sighting).\nAdapt recommendations based on activity type, terrain, weather, or other environmental factors.\n**Activity-Specific Metrics:**\n\n -- Swim: Focus on distance, pace, SWOLF, stroke count, and stroke efficiency.\n -- Bike: Analyze distance, average speed, cadence, power zones, heart rate, and elevation gain.\n -- Run: Examine distance, pace, cadence, stride length, heart rate zones, and elevation changes.\nPerformance Analysis and Recommendations:\n\n** Tailor feedback and advice based on the unique demands of each sport:\n - Swimming: Emphasize technique (catch, pull, body position), pacing, and breathing drills.\n - Cycling: Focus on power output, cadence optimization, endurance rides, and interval training.\n - Running: Analyze pace consistency, cadence, stride efficiency, and running economy.\nEnvironment-Specific Adjustments:\n\n - For swimming, account for differences in pool vs. open water conditions (e.g., sighting, drafting, and waves).\nFor cycling, consider terrain (flat, hilly, or rolling) and wind resistance.\n- For running, factor in surface type (road, trail, or track) and weather conditions.\nIntegrated Triathlon Insights:\n- \nProvide guidance on how each discipline complements the others.\nSuggest \"brick workouts\" (e.g., bike-to-run) for race-specific adaptations.\nRecommend recovery strategies that address multi-sport training fatigue.\nBehavior:\nBe precise, detailed, and motivational.\nTailor insights and recommendations to the specific activity type and the athlete’s experience level (beginner, intermediate, advanced).\nUse clear, actionable language and explain the reasoning behind suggestions.\nInputs You Will Receive:\nStrava activity data in JSON or tabular format.\nAthlete’s profile information, including goals, upcoming events, and experience level.\nMetrics such as distance, pace, speed, cadence, heart rate zones, power, SWOLF, stroke count, and elevation.\nOutput Requirements (Activity-Specific):\nSwim (Pool):\n\nAnalyze stroke efficiency, pace consistency, SWOLF, and technique.\nSuggest drills for stroke improvement (e.g., catch-up, fingertip drag).\nRecommend pacing intervals (e.g., 10x100m at target pace with rest).\nSwim (Open Water):\n\nEvaluate long-distance pacing and sighting frequency.\nProvide tips on drafting, breathing bilaterally, and adapting to waves or currents.\nSuggest open water-specific workouts (e.g., race-pace simulations with buoy turns).\nBike:\n\nAnalyze power distribution across zones, cadence, and heart rate trends.\nHighlight inefficiencies (e.g., low cadence on climbs or inconsistent power).\nRecommend specific workouts (e.g., 3x12-minute FTP intervals with 5-minute rest).\nSuggest gear and bike fit optimizations if needed.\nRun:\n\nEvaluate pacing strategy, cadence, and heart rate zones.\nIdentify inefficiencies in stride length or cadence.\nRecommend workouts like tempo runs, intervals, or long runs with negative splits.\nProvide race-day pacing strategies or tips for improving running economy.\nCross-Discipline Integration:\n\nSuggest brick workouts to improve transitions (e.g., 30-minute bike + 10-minute run at race pace).\nRecommend recovery sessions (e.g., easy swim or bike after a hard run).\nAdvise on balancing training load across disciplines.\n\n#### Expectations:\n- **Personalized Responses**: Always consider the user's activity history, goals, and fitness level when offering insights or advice.\n- **Practical Guidance**: Provide clear, actionable recommendations.\n- **Encouragement**: Keep the tone positive and motivational, celebrating progress while constructively addressing areas for improvement.\n\n#### Context Awareness:\nYou have access to the user's Strava data, including:\n- Activity type (e.g., run, swim, bike)\n- Distance, pace, and time\n- Heart rate and effort levels\n- Elevation gain and route details\n- Historical performance trends\n\n#### Example Prompts You Will Receive:\n- \"Here are my recent running activities. How can I improve my pace?\"\n- \"This is my swimming data from this week. What should I focus on to improve my technique?\"\n- \"Analyze my cycling activity and tell me how I can climb better next time.\"\n\n\n#### Goal:\nHelp the user achieve their athletic potential by providing precise, actionable feedback and a customized plan to enhance their performance and enjoyment of their activities.\n\nHere is the Activity Data : \n{{ $json.data }}",
+        "options": {}
+      },
+      "id": "acab60f9-3bae-47a3-8afa-8de023255cf0",
+      "name": "Fitness Coach",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        272,
+        128
+      ],
+      "typeVersion": 1.7
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input JSON from the previous node\nconst input = $json.output;\n\n// Split the input into sections based on double newlines\nconst sections = input.split('\\n\\n');\n\n// Initialize the result array\nconst result = [];\n\n// Process each section\nsections.forEach((section) => {\n const trimmedSection = section.trim();\n\n // Handle headings marked with ** (bold)\n if (/^\\*\\*(.*?)\\*\\*$/.test(trimmedSection)) {\n result.push({ type: 'heading', content: trimmedSection.replace(/\\*\\*(.*?)\\*\\*/, '<b>$1</b>') });\n }\n // Handle bullet lists marked with *\n else if (trimmedSection.startsWith('*')) {\n const listItems = trimmedSection.split('\\n').map((item) => item.trim().replace(/^\\*\\s/, ''));\n result.push({ type: 'list', items: listItems });\n }\n // Handle numbered lists\n else if (/^\\d+\\.\\s/.test(trimmedSection)) {\n const numberedItems = trimmedSection.split('\\n').map((item) => item.trim().replace(/^\\d+\\.\\s/, ''));\n result.push({ type: 'numbered-list', items: numberedItems });\n }\n // Handle paragraphs\n else {\n result.push({ type: 'paragraph', content: trimmedSection });\n }\n});\n\n// Return the result array\nreturn result.map(item => ({ json: item }));\n"
+      },
+      "id": "ada86e08-fa08-42bd-8da4-bbf535584fd6",
+      "name": "Structure Output",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1456,
+        96
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get input data from n8n\nconst inputData = $input.all(); // Fetch all input data items\n\n// Function to convert JSON data into a single HTML string\nfunction convertToHTML(data) {\n let html = '';\n\n data.forEach((item) => {\n switch (item.json.type) {\n case 'paragraph':\n html += `<p>${item.json.content}</p>`;\n break;\n case 'heading':\n html += `<h2>${item.json.content}</h2>`;\n break;\n case 'list':\n html += '<ul>';\n item.json.items.forEach((listItem) => {\n html += `<li>${listItem}</li>`;\n });\n html += '</ul>';\n break;\n case 'numbered-list':\n html += '<ol>';\n item.json.items.forEach((listItem) => {\n html += `<li>${listItem}</li>`;\n });\n html += '</ol>';\n break;\n default:\n break;\n }\n });\n\n return html;\n}\n\n// Convert inputData to a single HTML string\nconst singleHTML = convertToHTML(inputData);\n\n// Return as a single item\nreturn [{ json: { html: singleHTML } }];\n"
+      },
+      "id": "4f98367a-8bc0-47c9-9848-178c804c64af",
+      "name": "Conver to HTML",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1504,
+        288
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "fromEmail": "Fitness Coach <email@example.com>",
+        "toEmail": "email@gmail.com",
+        "subject": "=New Activity on Strava",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "209f7460-8f4e-42b8-a36c-0944f4e6fe68",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [
+        1856,
+        224
+      ],
+      "typeVersion": 2.1,
+      "webhookId": "f928e904-8e3b-4c53-aba8-bd55245937e1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n item.json.myNewField = 1;\n}\n\nreturn $input.all();"
+      },
+      "id": "2853fed2-7f54-4dd6-8852-6a22086dbadb",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -256,
+        192
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "content": "### Customer Experience Agent (AI)\nThe AI Triathlon Coach is an intelligent, data-driven virtual assistant designed to help triathletes optimize their training and performance across swimming, cycling, and running. Using advanced algorithms, it analyzes activity data from platforms like Strava and provides actionable insights tailored to the athlete’s goals, experience level, and specific disciplines.\nThis is connected to Gemini 2.0 Flash\n\n",
+        "height": 649,
+        "width": 444,
+        "color": 7
+      },
+      "id": "790887c9-ece7-4153-bab5-0173d5b93e08",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        160,
+        -128
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Convert to HTML\nNow the data will be structured and covnerted to HTML",
+        "height": 655,
+        "width": 329,
+        "color": 5
+      },
+      "id": "597b9434-b3ae-4c9e-8e1b-c4d520f92f7a",
+      "name": "Sticky Note12",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1376,
+        -80
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Get Strava Trigger\nIf you are using Strava, you can create API Key by logging in to : https://developers.strava.com/\n\nOnce data is capture you can then structure it, i am commbining all the activity data and sending to next node",
+        "height": 651,
+        "width": 503,
+        "color": 6
+      },
+      "id": "783564f8-0b7f-4537-a22b-31cd477371ef",
+      "name": "Sticky Note13",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -464,
+        -144
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Send Personalized Response\nActivity is analized you can either get the response by Whatsapp , emal, a blog or anything",
+        "height": 655,
+        "width": 609,
+        "color": 4
+      },
+      "id": "b3e222a5-bdcd-4588-a69c-ecdc9accfbf4",
+      "name": "Sticky Note16",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1744,
+        -80
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "additionalFields": {}
+      },
+      "id": "6724a561-268f-4a9f-a8b1-e29948e96182",
+      "name": "WhatsApp Business Cloud",
+      "type": "n8n-nodes-base.whatsApp",
+      "position": [
+        1856,
+        432
+      ],
+      "typeVersion": 1,
+      "webhookId": "b137f98d-9a0f-4c7e-91ec-4787818cef1d"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        928,
+        208
+      ],
+      "id": "9bfbe80c-1ca3-4910-bc93-8b6408bd4fac",
+      "name": "Append row in sheet"
+    },
+    {
+      "parameters": {
+        "content": "### Final Setup Required: Column Mapping\n\nAction 1: Credentials: Before running, you must first connect your own Google Sheets Credential and select your Document ID and Sheet Name.\nAction 2: Column Mapping: After connecting, open the \"Columns\" section and manually map your data fields. Map the following JSON fields to your sheet headers:\n\n* Worksheet Column Header - JSON Data Field\n* ACTIVITY_NAME - {{ $('Strava Trigger').item.json.name }}\n* DISTANCE_KM - {{ $('Strava Trigger').item.json.distance / 1000 }}\n* AI_FEEDBACK - {{ $('Fitness Coach').item.json.output }}\n* DATE - {{ $now.format('YYYY-MM-DD HH:mm') }}",
+        "height": 624,
+        "width": 656
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        688,
+        -128
+      ],
+      "typeVersion": 1,
+      "id": "d9ddf2f7-195a-45e1-ba5f-b0de60429d87",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Combine Everything",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fitness Coach": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conver to HTML": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Strava Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structure Output": {
+      "main": [
+        [
+          {
+            "node": "Conver to HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Everything": {
+      "main": [
+        [
+          {
+            "node": "Fitness Coach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Fitness Coach",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Structure Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4745e4f3-d3ff-4886-ae4a-6f21bb76668b",
+  "meta": {
+    "instanceId": "35ab32f3efc32e7770075c0bf6d587f0690d4c66ea03e863a40c1a522cbbe948"
+  },
+  "id": "8yPVnIVHYtl9O38a",
+  "tags": []
+}

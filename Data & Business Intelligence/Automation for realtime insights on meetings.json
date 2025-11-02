@@ -1,0 +1,534 @@
+{
+  "name": "Automation for realtime insights on meetings",
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "assistant",
+        "assistantId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "asst_D5t6bNnNpenmfC7PmvywMqyR",
+          "cachedResultName": "5minAI - Realtime Agent"
+        },
+        "prompt": "define",
+        "text": "={{ \n JSON.parse($('Insert Transcription Part').item.json.dialog)\n .filter(item => item.date_updated && new Date(item.date_updated) >= new Date($('Insert Transcription Part').item.json.date_updated))\n .sort((a, b) => a.order - b.order)\n .map(item => `${item.words}\\n${item.speaker}`)\n .join('\\n\\n')\n}}",
+        "memory": "threadId",
+        "threadId": "={{ $json.thread_id }}",
+        "options": {}
+      },
+      "id": "9ae62447-b9e8-4322-b048-b06fbd94020f",
+      "name": "OpenAI1",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        1504,
+        768
+      ],
+      "typeVersion": 1.6
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.data\nSET output = jsonb_set(\n output,\n '{dialog}', \n (\n COALESCE(\n (output->'dialog')::jsonb, \n '[]'::jsonb -- Initialize as empty array if dialog does not exist\n ) || jsonb_build_object(\n 'order', (COALESCE(jsonb_array_length(output->'dialog'), 0) + 1), -- Calculate the next order\n 'words', '{{ $('Webhook2').item.json.body.data.transcript.words.map(word => word.text.replace(/'/g, \"''\")).join(\" \") }}',\n 'speaker', '{{ $('Webhook2').item.json.body.data.transcript.speaker }}',\n 'language', '{{ $('Webhook2').item.json.body.data.transcript.language }}',\n 'speaker_id', ('{{ $('Webhook2').item.json.body.data.transcript.speaker_id }}')::int,\n 'date_updated', to_jsonb('{{ $now }}'::text)\n )\n )\n)\nWHERE input->>'recall_bot_id' = $1\nReturning input->>'openai_thread_id' as thread_id;",
+        "options": {
+          "queryReplacement": "={{ $('Scenario 2 Start - Webhook').item.json.body.data.bot_id }}"
+        }
+      },
+      "id": "92574a24-de89-4291-8f48-b1606f94220a",
+      "name": "Insert Transcription Part",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1088,
+        768
+      ],
+      "typeVersion": 2.5
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Create note record.",
+        "operation": "executeQuery",
+        "query": "UPDATE public.data\nSET output = jsonb_set(\n output,\n '{notes}', \n (\n COALESCE(\n (output->'notes')::jsonb, \n '[]'::jsonb -- Initialize as empty array if dialog does not exist\n ) || jsonb_build_object(\n 'order', (COALESCE(jsonb_array_length(output->'notes'), 0) + 1), -- Calculate the next order\n 'text', '{{ $fromAI(\"note\",\"Text of note.\") }}'\n )\n )\n)\nWHERE input->>'recall_bot_id' = $1",
+        "options": {
+          "queryReplacement": "={{ $('Scenario 2 Start - Webhook').item.json.body.data.bot_id }}"
+        }
+      },
+      "id": "6f5d9f5e-b6da-4b8a-8ede-63cb4f6bcd79",
+      "name": "Create Note",
+      "type": "n8n-nodes-base.postgresTool",
+      "position": [
+        1392,
+        944
+      ],
+      "typeVersion": 2.5
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://us-west-2.recall.ai/api/v1/bot",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n \"meeting_url\":\"{{ $json.meeting_url }}\",\n \"transcription_options\": {\n \"provider\": \"assembly_ai\"\n }\n,\n\"real_time_transcription\": {\n \"destination_url\": \"https://n8n.lowcoding.dev/webhook/d074ca1e-52f9-47af-8587-8c24d431f9cd\"\n },\n\"automatic_leave\": {\n \"silence_detection\": {\n \"timeout\": 300, \n \"activate_after\": 600\n },\n \"bot_detection\": {\n \"using_participant_events\": {\n \"timeout\": 600, \n \"activate_after\": 1200\n }\n },\n \"waiting_room_timeout\": 600,\n \"noone_joined_timeout\": 600,\n \"everyone_left_timeout\": 2,\n \"in_call_not_recording_timeout\": 600,\n \"recording_permission_denied_timeout\": 600\n}\n}",
+        "options": {}
+      },
+      "id": "ba2f4243-209e-4a46-bc99-a600ad46e4ae",
+      "name": "Create Recall bot",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1152,
+        80
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/threads",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "OpenAI-Beta",
+              "value": "assistants=v2"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "68d22bd3-5e60-449e-8bf2-ea7dcb4ae794",
+      "name": "Create OpenAI thread",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1344,
+        80
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "tableId": "data",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "input",
+              "fieldValue": "={{ {\"openai_thread_id\": $('Create OpenAI thread').item.json.id, \"recall_bot_id\": $('Create Recall bot').item.json.id, \"meeting_url\":$('Webhook').item.json.body.meeting_url } }}"
+            },
+            {
+              "fieldId": "output",
+              "fieldValue": "={{ {\"dialog\":[]} }}"
+            }
+          ]
+        }
+      },
+      "id": "83a64aa7-770e-491b-b6c3-ea3d43e185f9",
+      "name": "Create data record",
+      "type": "n8n-nodes-base.supabase",
+      "position": [
+        1520,
+        80
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## AI Agent for real-time insights on meetings\n\nTranscribing meetings manually can be tedious and prone to error. This workflow automates the transcription process in real-time, ensuring that key discussions and decisions are accurately captured and easily accessible for later review, thus enhancing productivity and clarity in communications.\n\nThe workflow employs an AI-powered assistant to join virtual meetings and capture discussions through real-time transcription. Key functionalities include:\n- Automatic joining of meetings on platforms like Zoom, Google Meet, and others with the ability to provide real-time transcription.\n- Integration with transcription APIs (e.g., AssemblyAI) to deliver seamless and accurate capture of dialogue.\n- Structuring and storing transcriptions efficiently in a database for easy retrieval and analysis.\n\n1. **Real-Time Transcription**: The assistant captures audio during meetings and transcribes it in real-time, allowing participants to focus on discussions.\n2. **Keyword Recognition**: Key phrases can trigger specific actions, such as noting important points or making prompts to the assistant.\n3. **Structured Data Management**: The assistant maintains a database of transcriptions linked to meeting details for organized storage and quick access later.",
+        "height": 657,
+        "width": 636,
+        "color": 7
+      },
+      "id": "ede316bb-6512-4cfb-8a4e-cd503b0ae6d7",
+      "name": "Sticky Note7",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Set up steps\n\n#### Preparation\n\n1. **Create Recall.ai API key**\n2. **Setup Supabase account and table**\n```\ncreate table\n public.data (\n id uuid not null default gen_random_uuid (),\n date_created timestamp with time zone not null default (now() at time zone 'utc'::text),\n input jsonb null,\n output jsonb null,\n constraint data_pkey primary key (id),\n ) tablespace pg_default;\n\n```\n3. **Create OpenAI API key**\n\n#### Development\n\n1. **Bot Creation**: \n - Use a node to create the bot that will join meetings. Provide the meeting URL and set transcription options within the API request.\n\n2. **Authentication**: \n - Configure authentication settings via a Bearer token for interacting with your transcription service.\n\n3. **Webhook Setup**: \n - Create a webhook to receive real-time transcription updates, ensuring timely data capture during meetings.\n\n4. **Join Meeting**: \n - Set the bot to join the specified meeting and actively listen to capture conversations.\n\n5. **Transcription Handling**: \n - Combine transcription fragments into cohesive sentences and manage dialog arrays for coherence.\n\n6. **Trigger Actions on Keywords**: \n - Set up keyword recognition that can initiate requests to the OpenAI API for additional interactions based on captured dialogue.\n\n7. **Output and Summary Generation**: \n - Produce insights and summary notes from the transcriptions that can be stored back into the database for future reference.",
+        "height": 626,
+        "width": 280,
+        "color": 7
+      },
+      "id": "9c1fa8e7-6906-460b-8810-3dec0c484fd4",
+      "name": "Sticky Note6",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        688
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4891fa6e-2dd5-4433-925c-5497ec82e8ab",
+              "name": "meeting_url",
+              "type": "string",
+              "value": "https://meet.google.com/iix-vrav-kuc"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3466219a-486d-45a2-a8f5-4809d091db27",
+      "name": "Scenario 1 Start - Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        944,
+        80
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "d074ca1e-52f9-47af-8587-8c24d431f9cd",
+        "options": {}
+      },
+      "id": "f980c158-d5f8-41c6-9595-22595d6231e7",
+      "name": "Scenario 2 Start - Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        880,
+        768
+      ],
+      "webhookId": "7f176935-cb83-4147-ac14-48c8d747863a",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "ba6c2ae5-d0f4-4242-9cf8-97cb84335a93",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              },
+              "leftValue": "={{ $('Scenario 2 Start - Webhook').item.json.body.data.transcript.words.map(word => word.text.replace(/'/g, \"''\")).join(\" \") }}",
+              "rightValue": "=Jimmy"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9195f2e0-27ec-4230-8568-0f0a64e6beb5",
+      "name": "If Jimmy word",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1280,
+        768
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "content": "## Scenario 1\n\n",
+        "height": 400,
+        "width": 920
+      },
+      "id": "81574eae-eba3-4ded-bdcc-9e51d1fb548d",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        832,
+        32
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## Scenario 2\n\n",
+        "height": 420,
+        "width": 1020
+      },
+      "id": "dd382642-9f09-4636-b4a5-999731e27081",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        832,
+        704
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Replace Supabase credentials",
+        "height": 80,
+        "width": 270,
+        "color": 3
+      },
+      "id": "7ec92d6a-ebc8-4e84-97b8-d17c2ce1fc3a",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1008,
+        944
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Replace server location\n\n",
+        "height": 80,
+        "width": 200,
+        "color": 3
+      },
+      "id": "02293896-a90f-43a9-9eb9-6cbd0a36f4ea",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1104,
+        288
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Replace OpenAI credentials",
+        "height": 80,
+        "width": 270,
+        "color": 4
+      },
+      "id": "47aad264-9d7e-4392-8427-486d4526ee4e",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1552,
+        960
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Replace credentials",
+        "height": 80,
+        "width": 290,
+        "color": 3
+      },
+      "id": "23c199ca-bef2-4d71-a2a0-341e5da0ca2b",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1344,
+        288
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Replace meeting url\n\n",
+        "height": 80,
+        "width": 200,
+        "color": 3
+      },
+      "id": "25653f18-2657-4e61-b1eb-16873709d2fc",
+      "name": "Sticky Note8",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        880,
+        288
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {
+    "Create Recall bot": [
+      {
+        "json": {
+          "id": "ab35fa56-e42b-47c6-b716-eac8d12af601",
+          "join_at": null,
+          "metadata": {},
+          "recording": null,
+          "video_url": null,
+          "recordings": [],
+          "meeting_url": {
+            "platform": "google_meet",
+            "meeting_id": "zst-ymag-zoa"
+          },
+          "status_changes": [
+            {
+              "code": "ready",
+              "message": null,
+              "sub_code": null,
+              "created_at": "2024-11-01T11:29:32.364684Z"
+            }
+          ],
+          "meeting_metadata": null,
+          "calendar_meetings": [],
+          "meeting_participants": []
+        }
+      }
+    ],
+    "Insert Transcription Part": [
+      {
+        "json": {
+          "dialog": "[{\"order\": 1, \"words\": \"Wait.\", \"speaker\": \"Mark S.\", \"language\": null, \"speaker_id\": 100}, {\"order\": 2, \"words\": \"A bit.\", \"speaker\": \"Mark S.\", \"language\": null, \"speaker_id\": 100}, {\"order\": 3, \"words\": \"It's not even subtitles and it's not even a real. It's. A Google Meet.\", \"speaker\": \"Mark S.\", \"language\": null, \"speaker_id\": 100}, {\"order\": 4, \"words\": \"Same story. I wasn't prepared. I don't know what to tell you. Maybe my AI body can help me.\", \"speaker\": \"Mark S.\", \"language\": null, \"speaker_id\": 100}, {\"order\": 5, \"words\": \"What truth?\", \"speaker\": \"Mark S.\", \"language\": null, \"speaker_id\": 100}, {\"order\": 6, \"words\": \"You can get the same AI body in one day. Just drop AI in comment and I will. Send you a guide.\", \"speaker\": \"Mark S.\", \"language\": null, \"speaker_id\": 100}, {\"order\": 7, \"words\": \"As it works well.\", \"speaker\": \"Mark S.\", \"language\": \"null\", \"speaker_id\": 100}, {\"order\": 8, \"words\": \"As it works well.\", \"speaker\": \"Mark S.\", \"language\": \"null\", \"speaker_id\": 100}, {\"order\": 9, \"words\": \"As it works well.\", \"speaker\": \"Mark S.\", \"language\": \"null\", \"speaker_id\": 100}, {\"order\": 10, \"words\": \"Let's it works well.\", \"speaker\": \"Mark S.\", \"language\": \"null\", \"speaker_id\": 100}, {\"order\": 11, \"words\": \"Let's it works well.\", \"speaker\": \"Mark S.\", \"language\": \"null\", \"speaker_id\": 100}, {\"order\": 12, \"words\": \"Let's it works well.\", \"speaker\": \"Mark S.\", \"language\": \"null\", \"speaker_id\": 100, \"date_updated\": \"2024-11-22T08:41:24.164+01:00\"}, {\"order\": 13, \"words\": \"Let's it works well.\", \"speaker\": \"Mark S.\", \"language\": \"null\", \"speaker_id\": 100, \"date_updated\": \"2024-11-22T08:50:11.330+01:00\"}]",
+          "thread_id": "thread_0g7p3iE7MYmDPiUuPiZP5vfR",
+          "date_updated": "2024-11-22T08:37:55.751+01:00"
+        }
+      }
+    ],
+    "Scenario 2 Start - Webhook": [
+      {
+        "json": {
+          "body": {
+            "data": {
+              "bot_id": "0032c6e2-78e9-46e7-a2ef-41d7b853ef48",
+              "transcript": {
+                "words": [
+                  {
+                    "text": "Let's",
+                    "end_time": 11.88,
+                    "start_time": 11.68
+                  },
+                  {
+                    "text": "it",
+                    "end_time": 12.12,
+                    "start_time": 11.88
+                  },
+                  {
+                    "text": "works",
+                    "end_time": 12.44,
+                    "start_time": 12.12
+                  },
+                  {
+                    "text": "well.",
+                    "end_time": 12.48,
+                    "start_time": 12.44
+                  }
+                ],
+                "source": "smart_annotator",
+                "speaker": "Mark S.",
+                "is_final": true,
+                "language": null,
+                "speaker_id": 100,
+                "original_transcript_id": 32
+              },
+              "recording_id": "ee1ad589-39fe-4ed5-b96f-cd14c63f3bc2"
+            },
+            "event": "bot.transcription"
+          },
+          "query": {},
+          "params": {},
+          "headers": {
+            "host": "n8n.lowcoding.dev",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "content-length": "495",
+            "accept-encoding": "gzip",
+            "x-forwarded-for": "52.10.191.34",
+            "x-forwarded-host": "n8n.lowcoding.dev",
+            "x-forwarded-proto": "https"
+          },
+          "webhookUrl": "https://n8n.lowcoding.dev/webhook/d074ca1e-52f9-47af-8587-8c24d431f9cd",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Create Note": {
+      "ai_tool": [
+        [
+          {
+            "node": "OpenAI1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Jimmy word": {
+      "main": [
+        [
+          {
+            "node": "OpenAI1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Recall bot": {
+      "main": [
+        [
+          {
+            "node": "Create OpenAI thread",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create OpenAI thread": {
+      "main": [
+        [
+          {
+            "node": "Create data record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Transcription Part": {
+      "main": [
+        [
+          {
+            "node": "If Jimmy word",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scenario 2 Start - Webhook": {
+      "main": [
+        [
+          {
+            "node": "Insert Transcription Part",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scenario 1 Start - Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Create Recall bot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "ed469b3d-59cf-4941-88de-721eb62ce95d",
+  "meta": {
+    "instanceId": "35ab32f3efc32e7770075c0bf6d587f0690d4c66ea03e863a40c1a522cbbe948"
+  },
+  "id": "h4PeiKjrxamF6POQ",
+  "tags": []
+}

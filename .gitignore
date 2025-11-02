@@ -1,0 +1,31 @@
+# ----------------------------------------------------
+# N8N WORKFLOW SPECIFIC EXCLUSIONS (CRITICAL)
+# ----------------------------------------------------
+
+credentials.json
+credentials-stubs.json
+variables.json
+workflows-export.json
+.env
+.local-credentials.json
+.n8n
+
+# ----------------------------------------------------
+# GENERAL PROJECT AND ENVIRONMENT EXCLUSIONS
+# ----------------------------------------------------
+
+# Node.js/npm dependencies (common for dev tools)
+/node_modules
+
+# VS Code Metadata/Local Configuration
+.vscode/
+
+# Log files (if any node creates a local log)
+*.log
+npm-debug.log
+
+# Temporary/Cache Files
+*.tmp
+*.temp
+/dist
+/build

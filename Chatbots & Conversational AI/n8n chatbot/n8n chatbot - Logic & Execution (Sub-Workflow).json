@@ -1,0 +1,318 @@
+{
+  "name": "n8n chatbot - Logic & Execution (Sub-Workflow)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "17137521-77d3-428a-b5e0-bb61c7cd09a4",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -464,
+        224
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c0b6e779-0f7b-41f0-81f8-457f2b31ccfe",
+              "name": "response",
+              "type": "array",
+              "value": "={{ $json.freeTimeSlots.toJsonString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1caca0b7-d227-43c8-a90b-4d969224fd35",
+      "name": "varResponse",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        496,
+        96
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: An array with objects containing a 'value' array of events.\nconst businessHoursStart = \"08:00:00Z\"; // Business hours start time\nconst businessHoursEnd = \"17:30:00Z\"; // Business hours end time\n\nconst inputData = items[0].json.value; // Assuming the input data is in the 'value' array of the first item\n\n// Function to convert ISO datetime string to a Date object with specified time\nfunction getDateWithTime(dateString, time) {\n const datePart = new Date(dateString).toISOString().split(\"T\")[0]; // Extract the date part (YYYY-MM-DD)\n return new Date(`${datePart}T${time}`);\n}\n\n// Function to get day of the week from a date string\nfunction getDayOfWeek(dateString) {\n const daysOfWeek = [\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"];\n return daysOfWeek[new Date(dateString).getUTCDay()];\n}\n\n// Organise events by date\nconst eventsByDate = {};\ninputData.forEach(event => {\n const eventDate = new Date(event.start.dateTime).toISOString().split(\"T\")[0]; // Extract the date\n if (!eventsByDate[eventDate]) {\n eventsByDate[eventDate] = [];\n }\n if (event.showAs === \"busy\") {\n eventsByDate[eventDate].push({\n start: new Date(event.start.dateTime),\n end: new Date(event.end.dateTime),\n timeZone: event.start.timeZone // Add timeZone to the event object\n });\n }\n});\n\n// Find free slots within business hours for each date\nconst freeTimeSlots = [];\n\nfor (const [date, busyEvents] of Object.entries(eventsByDate)) {\n // Sort events by their start time\n busyEvents.sort((a, b) => a.start - b.start);\n\n // Define business start and end times for the current date\n const businessStart = getDateWithTime(date, businessHoursStart);\n const businessEnd = getDateWithTime(date, businessHoursEnd);\n\n let freeStart = businessStart;\n\n // Loop through busy events to find free slots\n for (const event of busyEvents) {\n if (freeStart < event.start) {\n // Add free slot if there's a gap between freeStart and the event start\n freeTimeSlots.push({\n date,\n dayOfWeek: getDayOfWeek(date), // Add day of the week key\n freeStart: freeStart.toISOString(),\n freeEnd: event.start.toISOString(),\n timeZone: event.timeZone // Add the timezone for the free slot\n });\n }\n // Move freeStart to the end of the current busy event\n freeStart = event.end;\n }\n\n // Check if there's free time after the last busy event until the end of business hours\n if (freeStart < businessEnd) {\n freeTimeSlots.push({\n date,\n dayOfWeek: getDayOfWeek(date), // Add day of the week key\n freeStart: freeStart.toISOString(),\n freeEnd: businessEnd.toISOString(),\n timeZone: busyEvents[0].timeZone // Use the timezone of the first event for consistency\n });\n }\n}\n\n// Output the free time slots\nreturn [{ json: { freeTimeSlots } }];\n"
+      },
+      "id": "14c38997-2609-407d-b08b-db0c94ceb424",
+      "name": "freeTimeSlots",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        272,
+        96
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.microsoft.com/v1.0/me/calendarView",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOutlookOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startDateTime",
+              "value": "={{ new Date(new Date().setDate(new Date().getDate() + 2)).toISOString() }}"
+            },
+            {
+              "name": "endDateTime",
+              "value": "={{ new Date(new Date().setDate(new Date().getDate() + 16)).toISOString() }}"
+            },
+            {
+              "name": "$top",
+              "value": "50"
+            },
+            {
+              "name": "select",
+              "value": "start,end,categories,importance,isAllDay,recurrence,showAs,subject,type"
+            },
+            {
+              "name": "orderby",
+              "value": "start/dateTime asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "outlook.timezone=\"Europe/London\""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7a0ba5a5-d014-45b6-823c-2736eaba0b05",
+      "name": "Get Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        48,
+        96
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "availability"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "availability"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "52fd844b-cc8d-471f-a56a-40e119b66194",
+                    "operator": {
+                      "name": "filter.operator.equals",
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "message"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "message"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b8a54215-dafb-4695-9c3d-2fc87eeacdc7",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "position": [
+        -256,
+        224
+      ],
+      "typeVersion": 3.2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0d2ad084-9707-4979-84e4-297d1c21f725",
+              "name": "response",
+              "type": "string",
+              "value": "={{ $json }}"
+            }
+          ]
+        },
+        "options": {
+          "ignoreConversionErrors": false
+        }
+      },
+      "id": "392d6564-d86a-473b-a9e5-d5ebfeafbd59",
+      "name": "varMessageResponse",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        272,
+        336
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "toRecipients": "you@yourdomain.com",
+        "subject": "={{ $('Execute Workflow Trigger').item.json.query.subject }}",
+        "bodyContent": "=<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\n <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n <title>New Webchat Customer Enquiry</title>\n <style type=\"text/css\">\n /* Client-specific styles */\n body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }\n table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }\n img { -ms-interpolation-mode: bicubic; }\n\n /* Reset styles */\n body { margin: 0; padding: 0; }\n img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }\n table { border-collapse: collapse !important; }\n body { height: 100% !important; margin: 0; padding: 0; width: 100% !important; }\n\n /* iOS BLUE LINKS */\n a[x-apple-data-detectors] {\n color: inherit !important;\n text-decoration: none !important;\n font-size: inherit !important;\n font-family: inherit !important;\n font-weight: inherit !important;\n line-height: inherit !important;\n }\n\n /* Styles for Outlook and other email clients */\n .ExternalClass { width: 100%; }\n .ExternalClass, .ExternalClass p, .ExternalClass span, .ExternalClass font, .ExternalClass td, .ExternalClass div { line-height: 100%; }\n \n /* Responsive styles */\n @media screen and (max-width: 600px) {\n .container { width: 100% !important; }\n .content { padding: 15px !important; }\n .field { padding: 10px !important; }\n .header h1 { font-size: 20px !important; }\n .header p { font-size: 12px !important; }\n }\n </style>\n</head>\n<body style=\"margin: 0; padding: 0; background-color: #f4f4f4;\">\n <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\">\n <tr>\n <td>\n <table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" style=\"border-collapse: collapse; background-color: #ffffff;\">\n <tr>\n <td align=\"center\" bgcolor=\"#1a1a1a\" style=\"padding: 30px 0; background: linear-gradient(135deg, #1a1a1a 0%, #2d1f3d 100%);\">\n <h1 style=\"color: #ffffff; font-family: Arial, sans-serif; font-size: 24px; font-weight: 700; margin: 0; text-transform: uppercase; letter-spacing: 1px;\">New Customer Enquiry</h1>\n <p style=\"color: #ffffff; font-family: Arial, sans-serif; font-size: 14px; line-height: 20px; margin: 10px 0 0; opacity: 0.8;\">A potential client has reached out through our webchat</p>\n </td>\n </tr>\n <tr>\n <td style=\"padding: 20px;\">\n <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\">\n <tr>\n <td style=\"padding: 15px; background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px;\">\n <p style=\"font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #6a1b9a; font-weight: bold; margin: 0 0 5px 0;\">FROM</p>\n <p style=\"font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #333333; margin: 0;\">{{ $('Execute Workflow Trigger').item.json.query.name }}</p>\n </td>\n </tr>\n <tr><td height=\"20\"></td></tr>\n <tr>\n <td style=\"padding: 15px; background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px;\">\n <p style=\"font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #6a1b9a; font-weight: bold; margin: 0 0 5px 0;\">EMAIL</p>\n <p style=\"font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #333333; margin: 0;\">{{ $('Execute Workflow Trigger').item.json.query.email }}</p>\n </td>\n </tr>\n <tr><td height=\"20\"></td></tr>\n <tr>\n <td style=\"padding: 15px; background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px;\">\n <p style=\"font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #6a1b9a; font-weight: bold; margin: 0 0 5px 0;\">COMPANY</p>\n <p style=\"font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #333333; margin: 0;\">{{ $('Execute Workflow Trigger').item.json.query.company }}</p>\n </td>\n </tr>\n <tr><td height=\"20\"></td></tr>\n <tr>\n <td style=\"padding: 15px; background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px;\">\n <p style=\"font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #6a1b9a; font-weight: bold; margin: 0 0 5px 0;\">MESSAGE</p>\n <p style=\"font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #333333; margin: 0;\">{{ $('Execute Workflow Trigger').item.json.query.message }}</p>\n </td>\n </tr>\n </table>\n </td>\n </tr>\n <tr>\n <td align=\"center\" bgcolor=\"#e90ebb\" style=\"padding: 20px; background: linear-gradient(135deg, #e90ebb 0%, #6a1b9a 100%);\">\n <p style=\"font-family: Arial, sans-serif; font-size: 14px; line-height: 20px; color: #ffffff; margin: 0;\">This enquiry was automatically generated from our website's chat interface.</p>\n </td>\n </tr>\n </table>\n </td>\n </tr>\n </table>\n</body>\n</html>",
+        "additionalFields": {
+          "importance": "High",
+          "bodyContentType": "html"
+        }
+      },
+      "id": "5ce4e68d-8e9e-4de2-ab97-0983a6fe4edc",
+      "name": "Send Message1",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "position": [
+        48,
+        336
+      ],
+      "typeVersion": 2,
+      "webhookId": "dbdd342f-9e6b-4bff-be80-0eec975366da"
+    },
+    {
+      "parameters": {
+        "content": "modify business hours\nmodify timezones",
+        "height": 238,
+        "width": 468
+      },
+      "id": "365ae581-6d58-47bf-88d0-2cb2d62d9f22",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -32,
+        16
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "Customise the email template",
+        "height": 240,
+        "width": 260,
+        "color": 4
+      },
+      "id": "1368a7b5-6ab1-426c-9c64-8242c16bf9d0",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -32,
+        272
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "freeTimeSlots": {
+      "main": [
+        [
+          {
+            "node": "varResponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Events": {
+      "main": [
+        [
+          {
+            "node": "freeTimeSlots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Get Events",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Message1": {
+      "main": [
+        [
+          {
+            "node": "varMessageResponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "ab90f364-0362-469d-8104-98e77a61b048",
+  "meta": {
+    "instanceId": "35ab32f3efc32e7770075c0bf6d587f0690d4c66ea03e863a40c1a522cbbe948"
+  },
+  "id": "GaleBpaA2bGPkmhC",
+  "tags": []
+}
